@@ -18,6 +18,15 @@ class TextInput(BaseModel):
 
 app = FastAPI()
 
+# ✅ Add this root route to avoid 404
+@app.get("/")
+def read_root():
+    return {
+        "message": "Welcome to the FastAPI NER API!",
+        "usage": "POST your text to the /ner endpoint.",
+        "docs_url": "/docs"
+    }
+
 @app.post("/ner")
 def perform_ner(input: TextInput):
     if nlp is None:
