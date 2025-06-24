@@ -1,9 +1,10 @@
-fastapi
-uvicorn[standard]
-spacy
-pandas
-requests
-gunicorn
-nest_asyncio
-python-multipart
-pymongo
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+spacy==3.8.0
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
+pandas==2.2.2
+requests==2.31.0
+gunicorn==21.2.0
+nest_asyncio==1.6.0
+python-multipart==0.0.9
+pymongo==4.7.2
