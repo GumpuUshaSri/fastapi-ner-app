@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+spacy
+pandas
+requests
+gunicorn
+nest_asyncio
