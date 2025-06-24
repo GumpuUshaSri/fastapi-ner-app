@@ -1,7 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 spacy
 pandas
 requests
 gunicorn
 nest_asyncio
+python-multipart
+pymongo
