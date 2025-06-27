@@ -8,7 +8,7 @@ import json
 import io
 from fastapi.responses import PlainTextResponse
 
-# Load SpaCy English model (small, to fit Render's free memory limits)
+# Load SpaCy English model
 try:
     nlp = spacy.load('en_core_web_sm')
     print("SpaCy model loaded successfully.")
@@ -18,11 +18,11 @@ except OSError:
 
 app = FastAPI()
 
-# Model for /ner
+# Pydantic model for text input
 class TextInput(BaseModel):
     text: str
 
-# Clean text before processing
+# Text cleaner
 def clean_text(text):
     if not isinstance(text, str):
         return ""
@@ -34,7 +34,7 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# Shared NER processing function
+# Shared NER logic
 def process_docs(texts):
     entity_counter = Counter()
     entity_groups = defaultdict(set)
@@ -55,7 +55,7 @@ def process_docs(texts):
 
     return {"summary": summary}
 
-# Root
+# Root endpoint
 @app.get("/")
 def read_root():
     return {
@@ -68,7 +68,7 @@ def read_root():
         "docs_url": "/docs"
     }
 
-# Single text NER
+# Text-based NER
 @app.post("/ner")
 def perform_ner(input: TextInput):
     if nlp is None:
@@ -80,43 +80,11 @@ def perform_ner(input: TextInput):
     entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
     return {"entity_summary": dict(counts), "entities": entities}
 
-# CSV NER
+# CSV upload with NER
 @app.post("/upload-csv")
 async def extract_entities_from_csv(file: UploadFile = File(...)):
     if nlp is None:
         raise HTTPException(status_code=500, detail="Model not loaded.")
-
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Upload a CSV file.")
-
-    contents = await file.read()
-    try:
-        df = pd.read_csv(pd.io.common.BytesIO(contents))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"CSV error: {str(e)}")
-
-    if "text" not in df.columns:
-        raise HTTPException(status_code=400, detail="CSV must contain 'text' column.")
-
-    results = []
-    for idx, row in df.iterrows():
-        text = row["text"]
-        doc = nlp(str(text))
-        entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
-        results.append({
-            "row": idx,
-            "original_text": text,
-            "entities": entities
-        })
-
-    return {"result": results}
-
-# Download NER summary as .txt
-@app.post("/download-summary-txt")
-async def download_summary_txt(file: UploadFile = File(...)):
-    if nlp is None:
-        raise HTTPException(status_code=500, detail="Model not loaded.")
-
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Upload a CSV file.")
 
@@ -129,12 +97,45 @@ async def download_summary_txt(file: UploadFile = File(...)):
     if "text" not in df.columns:
         raise HTTPException(status_code=400, detail="CSV must contain 'text' column.")
 
-    result = process_docs(df["text"].tolist())
+    df = df.dropna(subset=["text"])  # Drop rows with NaN in 'text'
+
+    results = []
+    for idx, row in df.iterrows():
+        text = str(row["text"])
+        doc = nlp(text)
+        entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
+        results.append({
+            "row": idx,
+            "original_text": text,
+            "entities": entities
+        })
+
+    return {"result": results}
+
+# TXT summary download
+@app.post("/download-summary-txt")
+async def download_summary_txt(file: UploadFile = File(...)):
+    if nlp is None:
+        raise HTTPException(status_code=500, detail="Model not loaded.")
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Upload a CSV file.")
+
+    contents = await file.read()
+    try:
+        df = pd.read_csv(pd.io.common.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"CSV read error: {str(e)}")
+
+    if "text" not in df.columns:
+        raise HTTPException(status_code=400, detail="CSV must contain 'text' column.")
+
+    texts = df["text"].dropna().astype(str).tolist()
+    result = process_docs(texts)
     summary = result["summary"]
 
     lines = ["NER Summary Report:\n"]
     for label, data in summary.items():
-        lines.append(f"{label}: {data['count']} occurrences")
+        lines.append(f"{label}: {data['count']} occurrence(s)")
         lines.append(f"  Entities: {', '.join(data['entities'])}\n")
 
     content = "\n".join(lines)
